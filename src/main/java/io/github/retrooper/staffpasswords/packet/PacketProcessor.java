@@ -33,8 +33,6 @@ public class PacketProcessor extends PacketListenerDynamic {
                 case PacketType.Client.BLOCK_PLACE:
                 case PacketType.Client.USE_ITEM:
                 case PacketType.Client.BLOCK_DIG:
-                case PacketType.Client.POSITION:
-                case PacketType.Client.POSITION_LOOK:
                     event.setCancelled(true);
                     event.getPlayer().sendMessage(ChatColor.DARK_RED
                             + "You are not allowed to do that action. Please login by typing your password!");

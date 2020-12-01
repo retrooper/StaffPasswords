@@ -18,6 +18,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerJoinEvent;
+import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.plugin.java.JavaPlugin;
 
@@ -77,7 +78,10 @@ public class Main extends JavaPlugin implements CommandExecutor, Listener {
                             player.sendMessage(ChatColor.RED + "The passwords do not match...");
                             return true;
                         }
-                        String hashedPassword = Hash.password(args[1].toCharArray()).algorithm(Type.PBKDF2_SHA256).create();
+                        String hashedPassword = Hash.password(args[1].toCharArray())
+                                .algorithm(Type.PBKDF2_SHA256)
+                                .factor(getConfig().getInt("hash_complexity_factor"))
+                                .create();
                         HashMap<String, String> hashedPasswordsMap = getHashedPasswordsMap();
                         hashedPasswordsMap.put(player.getUniqueId().toString(), hashedPassword);
                         updateHashedPasswordsMap(hashedPasswordsMap);
@@ -144,6 +148,17 @@ public class Main extends JavaPlugin implements CommandExecutor, Listener {
     @EventHandler
     public void onQuit(PlayerQuitEvent event) {
         unregisterUser(event.getPlayer().getUniqueId());
+    }
+
+    @EventHandler
+    public void onMove(PlayerMoveEvent event) {
+        UUID uuid = event.getPlayer().getUniqueId();
+        PlayerData data = Main.getInstance().getUserData(uuid);
+        if (!data.loggedIn && data.hasPassword) {
+            event.getPlayer().sendMessage(ChatColor.DARK_RED
+                    + "You are not allowed to do that action. Please login by typing your password!");
+            event.getPlayer().teleport(event.getFrom());
+        }
     }
 
     @EventHandler
