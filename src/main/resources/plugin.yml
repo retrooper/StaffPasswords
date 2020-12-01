@@ -1,0 +1,10 @@
+name: StaffPasswords
+version: 2.0
+main: io.github.retrooper.staffpasswords.Main
+author: retrooper
+commands:
+  staffpasswords:
+    description: StaffPasswords command
+    aliases:
+      - staffpassword
+      - sp
