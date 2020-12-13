@@ -2,6 +2,8 @@ name: StaffPasswords
 version: 2.0
 main: io.github.retrooper.staffpasswords.Main
 author: retrooper
+depend:
+  - packetevents
 commands:
   staffpasswords:
     description: StaffPasswords command

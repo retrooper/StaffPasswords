@@ -50,8 +50,8 @@
         <dependency>
             <groupId>com.github.retrooper</groupId>
             <artifactId>packetevents</artifactId>
-            <version>dev-cf930c6013-1</version>
-            <scope>compile</scope>
+            <version>dev-337551119b-1</version>
+            <scope>provided</scope>
         </dependency>
         <dependency>
             <groupId>com.amdelamar</groupId>

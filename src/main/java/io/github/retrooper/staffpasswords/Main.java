@@ -36,19 +36,21 @@ public class Main extends JavaPlugin implements CommandExecutor, Listener {
 
     @Override
     public void onLoad() {
-        PacketEvents.create().load();
+        PacketEvents.create().getSettings().injectEarly(true).injectAsync(true).ejectAsync(true)
+                .backupServerVersion(ServerVersion.v_1_7_10)
+                .packetHandlingThreadCount(1).checkForUpdates(false)
+        .injectionFailureMessage("Failed to inject you. Please rejoin! If rejoining doesn't work, please contact an administrator!");
+        PacketEvents.get().load();
     }
 
     @Override
     public void onEnable() {
         saveDefaultConfig();
         instance = this;
-        PacketEvents.get().getSettings().injectEarly(true).ejectAsync(true)
-                .backupServerVersion(ServerVersion.v_1_7_10).injectEarly(true)
-                .packetHandlingThreadCount(1).checkForUpdates(false);
-        PacketEvents.get().registerListener(new PacketProcessor(PacketEventPriority.LOWEST));
+
         Bukkit.getPluginManager().registerEvents(this, this);
         PacketEvents.get().init(this);
+        PacketEvents.get().registerListener(new PacketProcessor(PacketEventPriority.HIGH));
     }
 
     @Override
