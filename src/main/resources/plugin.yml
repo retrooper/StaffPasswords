@@ -1,5 +1,5 @@
 name: StaffPasswords
-version: 2.0
+version: 2.1
 main: io.github.retrooper.staffpasswords.Main
 author: retrooper
 depend:
