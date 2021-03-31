@@ -2,24 +2,23 @@ package io.github.retrooper.staffpasswords;
 
 import com.amdelamar.jhash.Hash;
 import com.amdelamar.jhash.algorithms.Type;
-import io.github.retrooper.packetevents.PacketEvents;
-import io.github.retrooper.packetevents.event.priority.PacketEventPriority;
-import io.github.retrooper.packetevents.utils.server.ServerVersion;
 import io.github.retrooper.staffpasswords.api.bukkit.events.StaffLoginFailureEvent;
 import io.github.retrooper.staffpasswords.api.bukkit.events.StaffLoginSuccessEvent;
 import io.github.retrooper.staffpasswords.data.PlayerData;
-import io.github.retrooper.staffpasswords.packet.PacketProcessor;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
+import org.bukkit.Location;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
+import org.bukkit.entity.EntityType;
 import org.bukkit.entity.Player;
-import org.bukkit.event.EventHandler;
-import org.bukkit.event.Listener;
-import org.bukkit.event.player.PlayerJoinEvent;
-import org.bukkit.event.player.PlayerMoveEvent;
-import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.event.*;
+import org.bukkit.event.block.BlockBreakEvent;
+import org.bukkit.event.block.BlockPlaceEvent;
+import org.bukkit.event.block.SignChangeEvent;
+import org.bukkit.event.entity.EntityDamageByEntityEvent;
+import org.bukkit.event.player.*;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.util.HashMap;
@@ -36,11 +35,6 @@ public class Main extends JavaPlugin implements CommandExecutor, Listener {
 
     @Override
     public void onLoad() {
-        PacketEvents.create().getSettings().injectEarly(true).injectAsync(true).ejectAsync(true)
-                .backupServerVersion(ServerVersion.v_1_7_10)
-                .packetHandlingThreadCount(1).checkForUpdates(false)
-        .injectionFailureMessage("Failed to inject you. Please rejoin! If rejoining doesn't work, please contact an administrator!");
-        PacketEvents.get().load();
     }
 
     @Override
@@ -49,13 +43,65 @@ public class Main extends JavaPlugin implements CommandExecutor, Listener {
         instance = this;
 
         Bukkit.getPluginManager().registerEvents(this, this);
-        PacketEvents.get().init(this);
-        PacketEvents.get().registerListener(new PacketProcessor(PacketEventPriority.HIGH));
+    }
+
+    private void handle(Player player, Cancellable cancellable) {
+        UUID uuid = player.getUniqueId();
+        PlayerData data = Main.getInstance().getUserData(uuid);
+        if (!data.loggedIn && data.hasPassword) {
+            cancellable.setCancelled(true);
+            player.sendMessage(ChatColor.DARK_RED
+                    + "You are not allowed to do that action. Please login by typing your password!");
+        }
+    }
+
+    private void handleCmdPreProcess(Player player, PlayerCommandPreprocessEvent event) {
+        UUID uuid = player.getUniqueId();
+        PlayerData data = Main.getInstance().getUserData(uuid);
+        if (!data.loggedIn && data.hasPassword) {
+            String msg = event.getMessage();
+            String loweredMsg = msg.toLowerCase();
+            if (!loweredMsg.startsWith("/staffpasswords login ") && loweredMsg.startsWith("/staffpassword login ")) {
+                event.setCancelled(true);
+            }
+        }
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR)
+    public void onAttack(EntityDamageByEntityEvent event) {
+        if (event.getDamager().getType() == EntityType.PLAYER) {
+            handle((Player) event.getDamager(), event);
+        }
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR)
+    public void onBlockDig(BlockBreakEvent event) {
+        handle(event.getPlayer(), event);
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR)
+    public void onBlockPlace(BlockPlaceEvent event) {
+        handle(event.getPlayer(), event);
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR)
+    public void onUpdateSign(SignChangeEvent event) {
+        handle(event.getPlayer(), event);
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR)
+    public void onMessage(AsyncPlayerChatEvent event) {
+        handle(event.getPlayer(), event);
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR)
+    public void onPreProcessCmdEvent(PlayerCommandPreprocessEvent event) {
+        handleCmdPreProcess(event.getPlayer(), event);
     }
 
     @Override
     public void onDisable() {
-        PacketEvents.get().stop();
+
     }
 
     @Override
@@ -67,7 +113,7 @@ public class Main extends JavaPlugin implements CommandExecutor, Listener {
                     player.sendMessage(ChatColor.RED + "You need the permission staffpasswords.staff to use this command.");
                     return true;
                 }
-                if (args.length != 3) {
+                if (args.length != 3 && args.length != 2) {
                     player.sendMessage(ChatColor.RED + "Invalid arguments.");
                     player.sendMessage(ChatColor.RED + "Usage: /staffpasswords setup <password> <repeat password>");
                     return true;
@@ -93,6 +139,31 @@ public class Main extends JavaPlugin implements CommandExecutor, Listener {
                         updateUserData(player.getUniqueId(), data);
                     } else {
                         player.sendMessage(ChatColor.RED + "You need to login before updating your password.");
+                    }
+                }
+                else if (args[0].equalsIgnoreCase("login")) {
+                    UUID uuid = player.getUniqueId();
+                    PlayerData data = Main.getInstance().getUserData(uuid);
+                    if (!data.loggedIn && data.hasPassword) {
+                        String hashedPassword = Main.getInstance().getHashedPasswordsMap().get(uuid.toString());
+                        String message = args[1];
+                        Event staffEvent;
+                        try {
+                            if (Hash.password(message.toCharArray()).algorithm(Type.PBKDF2_SHA256).verify(hashedPassword)) {
+                                data.loggedIn = true;
+                                Main.getInstance().updateUserData(uuid, data);
+                                player.sendMessage(ChatColor.GREEN + "You successfully logged in!");
+                                staffEvent = new StaffLoginSuccessEvent(player);
+                            } else {
+                                player.sendMessage(ChatColor.RED + "Incorrect password...");
+                                staffEvent = new StaffLoginFailureEvent(player);
+                            }
+
+                        } catch (Exception ex) {
+                            player.sendMessage(ChatColor.RED + "Incorrect password...");
+                            staffEvent = new StaffLoginFailureEvent(player);
+                        }
+                        Bukkit.getPluginManager().callEvent(staffEvent);
                     }
                 }
             }
@@ -122,7 +193,7 @@ public class Main extends JavaPlugin implements CommandExecutor, Listener {
 
     public HashMap<String, String> getHashedPasswordsMap() {
         HashMap<String, String> map = new HashMap<>();
-        if(!getConfig().isConfigurationSection("hashedpasswords")) {
+        if (!getConfig().isConfigurationSection("hashedpasswords")) {
             getConfig().createSection("hashedpasswords");
         }
         for (String key : getConfig().getConfigurationSection("hashedpasswords").getKeys(false)) {
@@ -154,12 +225,19 @@ public class Main extends JavaPlugin implements CommandExecutor, Listener {
 
     @EventHandler
     public void onMove(PlayerMoveEvent event) {
-        UUID uuid = event.getPlayer().getUniqueId();
-        PlayerData data = Main.getInstance().getUserData(uuid);
-        if (!data.loggedIn && data.hasPassword) {
-            event.getPlayer().sendMessage(ChatColor.DARK_RED
-                    + "You are not allowed to do that action. Please login by typing your password!");
-            event.getPlayer().teleport(event.getFrom());
+        double deltaX = Math.abs(event.getTo().getX() - event.getFrom().getX());
+        double deltaZ = Math.abs(event.getTo().getZ() - event.getFrom().getZ());
+        if (deltaX > 0.0 || deltaZ > 0.0) {
+            UUID uuid = event.getPlayer().getUniqueId();
+            PlayerData data = Main.getInstance().getUserData(uuid);
+            if (!data.loggedIn && data.hasPassword) {
+                event.getPlayer().sendMessage(ChatColor.DARK_RED
+                        + "You are not allowed to do that action. Please login by typing your password!");
+                Location fromLoc = event.getFrom();
+                fromLoc.setPitch(event.getTo().getPitch());
+                fromLoc.setYaw(event.getTo().getYaw());
+                event.getPlayer().teleport(fromLoc);
+            }
         }
     }
 
